@@ -36,13 +36,18 @@ endif(NOT OPENGL_FOUND)
 
 set(SOURCE_FILES 
 	 main.cpp
+	 
 	 cuda/StereoMatch.cu
 	 cuda/ColorConverter.cu
 	 cuda/kernels/StereoMatchKernels.cu
 	 cuda/kernels/ColorConverterKernels.cu
+	 
 	 gui/gui.cpp
 	 gui/widgets/myGlWidget.cpp
+	 
 	 ctrl/ctrl.cpp
+	 ctrl/procThread.cpp
+	 
 	 grabber/grabber.cpp
 )
 

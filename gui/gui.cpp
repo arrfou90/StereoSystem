@@ -125,7 +125,6 @@ void Gui::onClickOtherLeftCam() {
 		form.cb_LeftCam->addItem(text);
 		form.cb_LeftCam->setCurrentText(text);
 	}
-
 }
 void Gui::onClickOtherRightCam() {
 	bool ok;

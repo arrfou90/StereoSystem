@@ -4,7 +4,7 @@
 #include "grabber/grabber.h"
 #include "QtCore/qtimer.h"
 #include "QtGui/qimage.h"
-//#include "procThread.h"
+#include "procThread.h"
 
 class Gui;
 
@@ -27,6 +27,6 @@ public:
 
 private:
 	Gui* gui;
-//	ProcThread* processingThread;
+	ProcThread* processingThread;
 };
 #endif

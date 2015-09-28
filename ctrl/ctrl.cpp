@@ -1,34 +1,37 @@
 #include "ctrl.h"
 #include "gui/gui.h"
 
-
 Ctrl::Ctrl() {
 	gui = new Gui(this);
 
 	gui->setCamDevList(cGrabber::enumDevices());
 
-//	processingThread = new ProcThread();
-//
-//	cv::FileStorage calibrationSettings;
-//
-//	calibrationSettings.open("mystereocalib_0.17.yml", cv::FileStorage::READ);
-//
-//	cv::Mat CM1;
-//	cv::Mat T;
-//	calibrationSettings["CM1"] >> CM1;
-//	calibrationSettings["T"] >> T;
-//
-//	std::cout << CM1 << std::endl;
-//	std::cout << CM1.at<double>(0, 0) << " " << CM1.at<double>(1, 1) << " " << CM1.at<double>(0, 2)<< " " << CM1.at<double>(1, 2)<< " " << std::endl;
-//	std::cout << "b:" << cv::norm(T) << std::endl;
-//
-//	gui->setCameraData(CM1.at<double>(0, 0), CM1.at<double>(1, 1),
-//			CM1.at<double>(0, 2), CM1.at<double>(1, 2), cv::norm(T));
-//
-//	connect(processingThread,
-//			SIGNAL(finishedFrame(QImage , QImage, QImage , QImage , QImage )), this,
-//			SLOT(receiveFrame(QImage , QImage, QImage , QImage , QImage )),
-//			Qt::QueuedConnection);
+	processingThread = new ProcThread();
+
+	cv::FileStorage calibrationSettings;
+
+	if(!calibrationSettings.open("mystereocalib_0.17.yml", cv::FileStorage::READ))
+		return;
+
+	cv::Mat CM1;
+	cv::Mat T;
+	calibrationSettings["CM1"] >> CM1;
+	calibrationSettings["T"] >> T;
+
+	std::cout << CM1 << std::endl;
+	std::cout << CM1.at<double>(0, 0) << " " << CM1.at<double>(1, 1) << " "
+			<< CM1.at<double>(0, 2) << " " << CM1.at<double>(1, 2) << " "
+			<< std::endl;
+	std::cout << "b:" << cv::norm(T) << std::endl;
+
+	gui->setCameraData(CM1.at<double>(0, 0), CM1.at<double>(1, 1),
+			CM1.at<double>(0, 2), CM1.at<double>(1, 2), cv::norm(T));
+
+	connect(processingThread,
+			SIGNAL(finishedFrame(QImage , QImage, QImage , QImage , QImage )),
+			this,
+			SLOT(receiveFrame(QImage , QImage, QImage , QImage , QImage )),
+			Qt::QueuedConnection);
 
 //	QImage l, r;
 //	l.load("tsukubaleft.jpg");
@@ -49,49 +52,41 @@ Ctrl::Ctrl() {
 //	}
 }
 Ctrl::~Ctrl() {
-//	processingThread->stop();
-//	delete processingThread;
+	processingThread->stop();
+	delete processingThread;
 }
 
 void Ctrl::updateStereoSettings(int maxDisp, int consistTresh, int kernelSize) {
-//	processingThread->updateSettings(maxDisp, consistTresh, kernelSize);
+	processingThread->updateSettings(maxDisp, consistTresh, kernelSize);
 }
 bool Ctrl::onStartCapture(bool capture) {
-//	if (capture) {
-//		if (processingThread->init("mystereocalib_0.17.yml",
-//				gui->getLeftCamDev(), gui->getRightCamDev())) {
-//
-//			processingThread->start();
-//			return true;
-//		} else {
-//			return false;
-//		}
-//	} else {
-//		processingThread->stop();
-//		processingThread->wait();
-//		processingThread->uninit();
-//	}
-//	return true;
+	if (capture) {
+		if (processingThread->init("mystereocalib_0.17.yml",
+				gui->getLeftCamDev(), gui->getRightCamDev())) {
+
+			processingThread->start();
+			return true;
+		} else {
+			return false;
+		}
+	} else {
+		processingThread->stop();
+		processingThread->wait();
+		processingThread->uninit();
+	}
+	return true;
 }
-//void Ctrl::receiveRawImg(QImage& left, QImage& right)
-//{
-//	gui->displayRGB(left,right);
-//}
-//void Ctrl::receiveDispImg(QImage& left, QImage& right)
-//{
-//	gui->displayDisp(left,right);
-//}
 void Ctrl::receiveFrame(QImage leftRGB, QImage rightRGB, QImage leftDisp,
 		QImage rightDisp, QImage leftDispRaw) {
-	gui->displayFrame(leftRGB,rightRGB,leftDisp,rightDisp,leftDispRaw);
+	gui->displayFrame(leftRGB, rightRGB, leftDisp, rightDisp, leftDispRaw);
 }
 
 void Ctrl::enableAutoExp(bool enable) {
-//	processingThread->enableAutoExp(enable);
+	processingThread->enableAutoExp(enable);
 }
 void Ctrl::setManualExp(int v) {
-//	processingThread->setManualExp(v);
+	processingThread->setManualExp(v);
 }
-void Ctrl::onClickRefreshDevList(){
+void Ctrl::onClickRefreshDevList() {
 	gui->setCamDevList(cGrabber::enumDevices());
 }
