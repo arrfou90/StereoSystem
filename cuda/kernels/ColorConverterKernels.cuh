@@ -8,7 +8,7 @@ __global__ void kernelCalcHist(unsigned char* data, unsigned int* hist,
 __global__ void kernelRGBToGray(unsigned char* dev_rgbData,
 		unsigned char* dev_grayData, unsigned int imgSize);
 __global__ void kernelYUY2ToRGB(unsigned char* dev_yuy2Data,
-		unsigned char* dev_brgData, unsigned int imgSize);
+		unsigned char* dev_rgbData, unsigned int imgSize);
 __global__ void kernelYUY2ToGray(unsigned char* dev_yuy2Data,
 		unsigned char* dev_grayData, unsigned int imgSize);
 

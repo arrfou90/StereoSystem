@@ -101,13 +101,13 @@ bool cudaRGBToGray(unsigned char* host_rgbData, unsigned char* host_grayData,
 }
 
 __global__ void kernelYUY2ToRGB(unsigned char* dev_yuy2Data,
-		unsigned char* dev_brgData, unsigned int imgSize) {
+		unsigned char* dev_rgbData, unsigned int imgSize) {
 	int i = threadIdx.x + blockIdx.x * blockDim.x;
 	i *= 2;
 
 	if (i < imgSize - 1) {
 		unsigned char* yuy2Buff = dev_yuy2Data + i * 2;
-		unsigned char* rgbBuff = dev_brgData + i * 3;
+		unsigned char* rgbBuff = dev_rgbData + i * 3;
 		int u, v, y1, y2;
 
 		y1 = *yuy2Buff++;
@@ -141,32 +141,32 @@ __global__ void kernelYUY2ToRGB(unsigned char* dev_yuy2Data,
 	}
 }
 
-void cudaYUY2ToRGB_dev(unsigned char* dev_yuy2Data, unsigned char* dev_brgData,
+void cudaYUY2ToRGB_dev(unsigned char* dev_yuy2Data, unsigned char* dev_rgbData,
 		unsigned int imgSize) {
 
 	int blockSize = 1024;
 	int nBlocks = (imgSize / 2) / blockSize
 			+ ((imgSize / 2) % blockSize == 0 ? 0 : 1);
 
-	kernelYUY2ToRGB<<<nBlocks, blockSize>>>(dev_yuy2Data, dev_brgData, imgSize);
+	kernelYUY2ToRGB<<<nBlocks, blockSize>>>(dev_yuy2Data, dev_rgbData, imgSize);
 }
-bool cudaYUY2ToRGB(unsigned char* host_yuy2Data, unsigned char* host_brgData,
+bool cudaYUY2ToRGB(unsigned char* host_yuy2Data, unsigned char* host_rgbData,
 		unsigned int imgSize) {
 
-	unsigned char* dev_brgData;
+	unsigned char* dev_rgbData;
 	unsigned char* dev_yuy2Data;
 
-	cudaMalloc((void**) &dev_brgData, imgSize * 3);
+	cudaMalloc((void**) &dev_rgbData, imgSize * 3);
 	cudaMalloc((void**) &dev_yuy2Data, imgSize * 2);
 
 	cudaMemcpy(dev_yuy2Data, host_yuy2Data, imgSize * 2,
 			cudaMemcpyHostToDevice);
 
-	cudaYUY2ToRGB_dev(dev_yuy2Data, dev_brgData, imgSize);
+	cudaYUY2ToRGB_dev(dev_yuy2Data, dev_rgbData, imgSize);
 
-	cudaMemcpy(host_brgData, dev_brgData, imgSize * 3, cudaMemcpyDeviceToHost);
+	cudaMemcpy(host_rgbData, dev_rgbData, imgSize * 3, cudaMemcpyDeviceToHost);
 
-	cudaFree(dev_brgData);
+	cudaFree(dev_rgbData);
 	cudaFree(dev_yuy2Data);
 	return true;
 }

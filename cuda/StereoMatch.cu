@@ -12,7 +12,7 @@ cCudaStereoMatcher::cCudaStereoMatcher() {
 	kernelSize = 0;
 	maxDisp = 0;
 	consistencyTreshold = 0;
-	modes = INPUT_GRAYSCALE;
+	modes = OP_INPUT_GRAYSCALE;
 
 	host_grayLeft = NULL;
 	host_grayRight = NULL;
@@ -23,8 +23,8 @@ cCudaStereoMatcher::cCudaStereoMatcher() {
 	host_dispRawLeft = NULL;
 	host_dispRawRight = NULL;
 
-	dev_tmpBuff = NULL;
-	dev_tmpBuff2 = NULL;
+	dev_colorLeft = NULL;
+	dev_colorRight = NULL;
 	dev_grayLeft = NULL;
 	dev_grayRight = NULL;
 	dev_dispColorLeft = NULL;
@@ -35,19 +35,19 @@ cCudaStereoMatcher::cCudaStereoMatcher() {
 cCudaStereoMatcher::~cCudaStereoMatcher() {
 	deinitSystem();
 }
-bool cCudaStereoMatcher::initSystem(int width, int height, tOperationMode modes) {
+bool cCudaStereoMatcher::initSystem(int width, int height, int modes) {
 
 	if(isInitialized)
 		deinitSystem();
 
 	printf("width: %d, height: %d, mode: %d\n",width,height,modes);
 
-	if((modes & INPUT_COLOR) && (modes & INPUT_GRAYSCALE)){
+	if((modes & OP_INPUT_COLOR) && (modes & OP_INPUT_GRAYSCALE)){
 		printf("Invalid operation mode. \n");
 		return false;
 	}
 
-	if(width <= 0 || height <= 0 || modes == 0){
+	if(width <= 0 || height <= 0 || modes < 1){
 		printf("Invalid mode or size. \n");
 		return false;
 	}
@@ -62,38 +62,39 @@ bool cCudaStereoMatcher::initSystem(int width, int height, tOperationMode modes)
 	printf("BlockCnt: %d, BlockSize: %d\n",blockCnt,blockSize);
 
 	// Farbbild als Eingabe aber kein color match -> Grayscale erzeugen
-	if((modes & INPUT_COLOR) && !(modes & COLOR_MATCH)){
+	if((modes & OP_INPUT_COLOR) && !(modes & OP_COLOR_MATCH)){
 		grayscaleBufferUsed = true;
-		host_grayLeft = new unsigned char[imgSize];
-		host_grayRight = new unsigned char[imgSize];
-		cudaMalloc((void**)&dev_grayLeft,imgSize);
-		cudaMalloc((void**)&dev_grayRight,imgSize);
 	}
 	else{
 		grayscaleBufferUsed = false;
 	}
 
+	host_grayLeft = new unsigned char[imgSize];
+	host_grayRight = new unsigned char[imgSize];
+	host_colorLeft = new unsigned char[imgSize * 3];
+	host_colorRight = new unsigned char[imgSize * 3];
 	host_dispColorLeft = new unsigned char[imgSize * 3];
 	host_dispColorRight = new unsigned char[imgSize * 3];
 	host_dispRawLeft = new float[imgSize];
 	host_dispRawRight = new float[imgSize];
 
-	CudaSafeCall(cudaMalloc((void**)&dev_tmpBuff,imgSize * 3));
-	CudaSafeCall(cudaMalloc((void**)&dev_tmpBuff2,imgSize * 3));
+	CudaSafeCall(cudaMalloc((void**)&dev_grayLeft,imgSize));
+	CudaSafeCall(cudaMalloc((void**)&dev_grayRight,imgSize));
+	CudaSafeCall(cudaMalloc((void**)&dev_colorLeft,imgSize * 3));
+	CudaSafeCall(cudaMalloc((void**)&dev_colorRight,imgSize * 3));
 	CudaSafeCall(cudaMalloc((void**)&dev_dispColorLeft,imgSize * 3));
 	CudaSafeCall(cudaMalloc((void**)&dev_dispColorRight,imgSize * 3));
-	CudaSafeCall(cudaMalloc((void**)&dev_dispRawLeft,imgSize));
-	CudaSafeCall(cudaMalloc((void**)&dev_dispRawRight,imgSize));
+	CudaSafeCall(cudaMalloc((void**)&dev_dispRawLeft,imgSize * sizeof(float)));
+	CudaSafeCall(cudaMalloc((void**)&dev_dispRawRight,imgSize * sizeof(float)));
 	isInitialized = true;
 	return true;
 }
 void cCudaStereoMatcher::deinitSystem() {
 	if (isInitialized) {
 		isInitialized = false;
-		if (grayscaleBufferUsed) {
-			delete host_grayLeft;
-			delete host_grayRight;
-		}
+
+		delete host_grayLeft;
+		delete host_grayRight;
 		delete host_colorLeft;
 		delete host_colorRight;
 		delete host_dispColorLeft;
@@ -101,12 +102,10 @@ void cCudaStereoMatcher::deinitSystem() {
 		delete host_dispRawLeft;
 		delete host_dispRawRight;
 
-		CudaSafeCall(cudaFree((void**) &dev_tmpBuff));
-		CudaSafeCall(cudaFree((void**) &dev_tmpBuff2));
-		if(grayscaleBufferUsed){
-			CudaSafeCall(cudaFree((void**) &dev_grayLeft));
-			CudaSafeCall(cudaFree((void**) &dev_grayRight));
-		}
+		CudaSafeCall(cudaFree((void**) &dev_colorLeft));
+		CudaSafeCall(cudaFree((void**) &dev_colorRight));
+		CudaSafeCall(cudaFree((void**) &dev_grayLeft));
+		CudaSafeCall(cudaFree((void**) &dev_grayRight));
 		CudaSafeCall(cudaFree((void**) &dev_dispColorLeft));
 		CudaSafeCall(cudaFree((void**) &dev_dispColorRight));
 		CudaSafeCall(cudaFree((void**) &dev_dispRawLeft));
@@ -123,62 +122,90 @@ bool cCudaStereoMatcher::processStereo(unsigned char* host_leftImg, unsigned cha
 	if(!isInitialized)
 		return false;
 
-	bool colorInput = modes & INPUT_COLOR;
-	bool colorMatch = modes & COLOR_MATCH;
-	bool subpixel = modes & SUBPIXEL;
+	bool colorInput = modes & OP_INPUT_COLOR;
+	bool colorMatch = modes & OP_COLOR_MATCH;
+	bool subpixel = modes & OP_SUBPIXEL;
+
+	CudaSafeCall(cudaMemset(dev_dispColorLeft,0,imgSize*3));
+	CudaSafeCall(cudaMemset(dev_dispColorRight,0,imgSize*3));
+	CudaSafeCall(cudaMemset(dev_dispRawLeft,0,imgSize*sizeof(float)));
+	CudaSafeCall(cudaMemset(dev_dispRawRight,0,imgSize*sizeof(float)));
 
 	if(colorInput){
+		CudaSafeCall(cudaMemcpy(dev_colorLeft,host_leftImg,imgSize*3,cudaMemcpyHostToDevice));
+		CudaSafeCall(cudaMemcpy(dev_colorRight,host_rightImg,imgSize*3,cudaMemcpyHostToDevice));
 		if(colorMatch && subpixel){
 
 		}
 		else if(colorMatch){
-
-		}
-		else if (subpixel){
-
-		}else {
-			CudaSafeCall(cudaMemcpy(dev_tmpBuff,host_leftImg,imgSize*3,cudaMemcpyHostToDevice));
-			CudaSafeCall(cudaMemcpy(dev_tmpBuff2,host_rightImg,imgSize*3,cudaMemcpyHostToDevice));
-			kernelRGBToGray<<<blockCnt,blockSize>>>(dev_tmpBuff,dev_grayLeft,imgSize);
+			kernelStereoMatchL2R<<<blockCnt, blockSize>>>(dev_colorLeft,
+					dev_colorRight, dev_dispRawLeft, width, height, kernelSize,
+					maxDisp, colorMatch, subpixel);
 			CudaCheckError();
-			kernelRGBToGray<<<blockCnt, blockSize>>>(dev_tmpBuff2,
-					dev_grayRight, imgSize);
-			CudaCheckError();
-
-			kernelStereoMatchL2R<<<blockCnt, blockSize>>>(dev_grayLeft,
-					dev_grayRight, dev_dispRawLeft, width, height, kernelSize,
-					maxDisp);
-			CudaCheckError();
-			kernelStereoMatchR2L<<<blockCnt, blockSize>>>(dev_grayLeft,
-					dev_grayRight, dev_dispRawRight, width, height, kernelSize,
-					maxDisp);
+			kernelStereoMatchR2L<<<blockCnt, blockSize>>>(dev_colorLeft,
+					dev_colorRight, dev_dispRawRight, width, height, kernelSize,
+					maxDisp, colorMatch, subpixel);
 			CudaCheckError();
 
 			if (consistencyTreshold >= 0) {
 				kernelLRConsistencyCheck<<<blockCnt, blockSize>>>(
 						dev_dispRawLeft, dev_dispRawRight, width, height,
-						kernelSize, consistencyTreshold);
+						kernelSize, consistencyTreshold, colorMatch);
+				CudaCheckError();
+			}
+		}
+		else if (subpixel){
+
+		}else {
+			kernelRGBToGray<<<blockCnt, blockSize>>>(dev_colorLeft,dev_grayLeft, imgSize);
+			CudaCheckError();
+			kernelRGBToGray<<<blockCnt, blockSize>>>(dev_colorRight,dev_grayRight, imgSize);
+			CudaCheckError();
+
+			kernelStereoMatchL2R<<<blockCnt, blockSize>>>(dev_grayLeft,
+					dev_grayRight, dev_dispRawLeft, width, height, kernelSize,
+					maxDisp, colorMatch, subpixel);
+			CudaCheckError();
+			kernelStereoMatchR2L<<<blockCnt, blockSize>>>(dev_grayLeft,
+					dev_grayRight, dev_dispRawRight, width, height, kernelSize,
+					maxDisp, colorMatch, subpixel);
+			CudaCheckError();
+
+			if (consistencyTreshold >= 0) {
+				kernelLRConsistencyCheck<<<blockCnt, blockSize>>>(
+						dev_dispRawLeft, dev_dispRawRight, width, height,
+						kernelSize, consistencyTreshold, colorMatch);
 				CudaCheckError();
 			}
 		}
 	}
 	// Grayscale
+	// TODO Testen
 	else{
 
-		if (subpixel){
+		if (subpixel) {
 
 		} else {
-			CudaSafeCall(cudaMemcpy(dev_grayLeft, host_leftImg, imgSize, cudaMemcpyHostToDevice));
-			CudaSafeCall(cudaMemcpy(dev_grayRight, host_rightImg, imgSize, cudaMemcpyHostToDevice));
+			CudaSafeCall(
+					cudaMemcpy(dev_grayLeft, host_leftImg, imgSize,
+							cudaMemcpyHostToDevice));
+			CudaSafeCall(
+					cudaMemcpy(dev_grayRight, host_rightImg, imgSize,
+							cudaMemcpyHostToDevice));
 
-			kernelStereoMatchL2R<<<blockCnt,blockSize>>>(dev_grayLeft,dev_grayRight,dev_dispRawLeft,width,height,kernelSize,maxDisp);
+			kernelStereoMatchL2R<<<blockCnt, blockSize>>>(dev_grayLeft,
+					dev_grayRight, dev_dispRawLeft, width, height, kernelSize,
+					maxDisp, colorMatch, subpixel);
 			CudaCheckError();
-			kernelStereoMatchR2L<<<blockCnt,blockSize>>>(dev_grayLeft,dev_grayRight,dev_dispRawRight,width,height,kernelSize,maxDisp);
+			kernelStereoMatchR2L<<<blockCnt, blockSize>>>(dev_grayLeft,
+					dev_grayRight, dev_dispRawRight, width, height, kernelSize,
+					maxDisp, colorMatch, subpixel);
 			CudaCheckError();
 
 			if (consistencyTreshold >= 0) {
-				kernelLRConsistencyCheck<<<blockCnt,blockSize>>>(dev_dispRawLeft, dev_dispRawRight,
-						width, height, kernelSize, consistencyTreshold);
+				kernelLRConsistencyCheck<<<blockCnt, blockSize>>>(
+						dev_dispRawLeft, dev_dispRawRight, width, height,
+						kernelSize, consistencyTreshold, colorMatch);
 				CudaCheckError();
 			}
 		}
@@ -190,8 +217,8 @@ bool cCudaStereoMatcher::processStereo(unsigned char* host_leftImg, unsigned cha
 	CudaCheckError();
 
 	// Receive data
-	CudaSafeCall(cudaMemcpy(host_dispRawLeft,dev_dispRawLeft,imgSize,cudaMemcpyDeviceToHost));
-	CudaSafeCall(cudaMemcpy(host_dispRawRight,dev_dispRawRight,imgSize,cudaMemcpyDeviceToHost));
+	CudaSafeCall(cudaMemcpy(host_dispRawLeft,dev_dispRawLeft,imgSize * sizeof(float),cudaMemcpyDeviceToHost));
+	CudaSafeCall(cudaMemcpy(host_dispRawRight,dev_dispRawRight,imgSize * sizeof(float),cudaMemcpyDeviceToHost));
 	CudaSafeCall(cudaMemcpy(host_dispColorLeft,dev_dispColorLeft,imgSize*3,cudaMemcpyDeviceToHost));
 	CudaSafeCall(cudaMemcpy(host_dispColorRight,dev_dispColorRight,imgSize*3,cudaMemcpyDeviceToHost));
 

@@ -77,11 +77,11 @@ void MyGlWidget::initializeGL()
 
 	if (!img.isNull() && !disp.isNull())
 	{
-		if (disp.format() == QImage::Format_Grayscale8) {
+		if (disp.format() == QImage::Format_ARGB32) {
 			glBegin(GL_POINTS);
 			if (img.format() == QImage::Format_RGB888) {
 				unsigned char* imgData = img.bits();
-				unsigned char* dispData = disp.bits();
+				float* dispData = (float*)disp.bits();
 				for (int y = 0; y < img.height(); y++) {
 					for (int x = 0; x < img.width(); x++) {
 

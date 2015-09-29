@@ -9,11 +9,16 @@ public:
 	cCudaStereoMatcher();
 	~cCudaStereoMatcher();
 
-	typedef enum {
-		INPUT_GRAYSCALE = 0x01, INPUT_COLOR = 0x02, SUBPIXEL = 0x04, COLOR_MATCH = 0x08
-	} tOperationMode;
+	static const int OP_INPUT_GRAYSCALE = 0x01;
+	static const int OP_INPUT_COLOR = 0x02;
+	static const int OP_SUBPIXEL = 0x04;
+	static const int OP_COLOR_MATCH = 0x08;
 
-	bool initSystem(int width, int height, tOperationMode modes);
+//	typedef enum {
+//		INPUT_GRAYSCALE = 0x01, INPUT_COLOR = 0x02, SUBPIXEL = 0x04, COLOR_MATCH = 0x08
+//	} tOperationMode;
+
+	bool initSystem(int width, int height, int modes);
 	void deinitSystem();
 	void updateSettings(int kernelSize, int maxDisp, int consistencyTreshold);
 
@@ -31,15 +36,15 @@ public:
 	float* host_dispRawRight;
 
 private:
-	tOperationMode modes;
+	int modes;
 	bool isInitialized;
 	int imgSize, width, height, kernelSize, maxDisp, consistencyTreshold;
 
 	int blockSize, blockCnt;
 	bool grayscaleBufferUsed;
 
-	unsigned char* dev_tmpBuff;
-	unsigned char* dev_tmpBuff2;
+	unsigned char* dev_colorLeft;
+	unsigned char* dev_colorRight;
 	unsigned char* dev_grayLeft;
 	unsigned char* dev_grayRight;
 	unsigned char* dev_dispColorLeft;

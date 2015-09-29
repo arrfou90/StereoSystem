@@ -2,32 +2,47 @@
 #include "QtGui/qimage.h"
 #include "stdio.h"
 #include <iostream>
-#include <time.h>
+#include <ctime>
 
 ProcThread::ProcThread(QObject *parent) :
 		QThread(parent) {
 	rawLeft = NULL;
 	rawRight = NULL;
+	rgbLeft = NULL;
+	rgbRight = NULL;
+	isInitialized = false;
+	isRunning = false;
 }
 ProcThread::~ProcThread() {
 	uninit();
 }
 
 void ProcThread::uninit() {
-	if (rawLeft != NULL) {
-		delete rawLeft;
-		rawLeft = NULL;
-		delete rawRight;
-	}
-
 	leftGrabber.stopCapture();
 	rightGrabber.stopCapture();
 	leftGrabber.closeDev();
 	rightGrabber.closeDev();
+
+	if (rawLeft != NULL) {
+		delete rawLeft;
+		delete rawRight;
+		delete rgbLeft;
+		delete rgbRight;
+		rawLeft = NULL;
+		rawRight = NULL;
+		rgbLeft = NULL;
+		rgbRight = NULL;
+	}
+
+	isInitialized = false;
+
 }
 
 bool ProcThread::init(string calibFile, string leftDev, string rightDev,
 		int reqWidth, int reqHeight) {
+
+	if(isInitialized)
+		uninit();
 
 	if (!calibrationSettings.open(calibFile, cv::FileStorage::READ))
 		return false;
@@ -64,11 +79,13 @@ bool ProcThread::init(string calibFile, string leftDev, string rightDev,
 	} else {
 		imgSize = leftGrabber.getWidth() * leftGrabber.getHeight();
 
-		rawLeft = new unsigned char[imgSize * 3];
-		rawRight = new unsigned char[imgSize * 3];
+		rawLeft = new unsigned char[imgSize * 2];
+		rawRight = new unsigned char[imgSize * 2];
+		rgbLeft = new unsigned char[imgSize * 3];
+		rgbRight = new unsigned char[imgSize * 3];
 		initialized = matcher.initSystem(leftGrabber.getWidth(),
 						leftGrabber.getHeight(),
-						cCudaStereoMatcher::INPUT_COLOR);
+						cCudaStereoMatcher::OP_INPUT_COLOR | cCudaStereoMatcher::OP_COLOR_MATCH);
 		if (!initialized) {
 			printf("Init of Stereomatcher failed.\n");
 			return false;
@@ -82,7 +99,7 @@ bool ProcThread::init(string calibFile, string leftDev, string rightDev,
 				calibData.P2,
 				cv::Size(leftGrabber.getWidth(), leftGrabber.getHeight()),
 				CV_32FC1, undistData.map2x, undistData.map2y);
-
+		isInitialized = true;
 	}
 	return initialized;
 }
@@ -95,17 +112,34 @@ void ProcThread::run() {
 	if (rawLeft == NULL)
 		return;
 
+	cv::Mat tmpMatRGBLeft(leftGrabber.getHeight(),
+			leftGrabber.getWidth(), CV_8UC3, rgbLeft);
+	cv::Mat tmpMatRGBRight(leftGrabber.getHeight(),
+			leftGrabber.getWidth(), CV_8UC3, rgbRight);
+
+	QImage imgLeft, imgRight;
+	imgLeft = QImage(rgbLeft, leftGrabber.getWidth(),
+			leftGrabber.getHeight(), QImage::Format_RGB888);
+	imgRight = QImage(rgbRight, leftGrabber.getWidth(),
+			leftGrabber.getHeight(), QImage::Format_RGB888);
+
+	QImage imgLeftDisp, imgRightDisp, leftDispRaw;
+	imgLeftDisp = QImage(matcher.host_dispColorLeft,
+			leftGrabber.getWidth(), leftGrabber.getHeight(),
+			QImage::Format_RGB888);
+	imgRightDisp = QImage(matcher.host_dispColorRight,
+			leftGrabber.getWidth(), leftGrabber.getHeight(),
+			QImage::Format_RGB888);
+	leftDispRaw = QImage((unsigned char*) matcher.host_dispRawLeft,
+			leftGrabber.getWidth(), leftGrabber.getHeight(),
+			QImage::Format_ARGB32);
+
 	while (isRunning) {
 		if (leftGrabber.grabFrame(rawLeft)
 				&& rightGrabber.grabFrame(rawRight)) {
-
-			cColorConverter::cudaYUY2ToRGB(rawLeft, rawLeft, imgSize);
-			cColorConverter::cudaYUY2ToRGB(rawRight, rawRight, imgSize);
-
-			cv::Mat tmpMatRGBLeft(leftGrabber.getHeight(),
-					leftGrabber.getWidth(), CV_8UC3, rawLeft);
-			cv::Mat tmpMatRGBRight(leftGrabber.getHeight(),
-					leftGrabber.getWidth(), CV_8UC3, rawRight);
+			clock_t startTime = clock();
+			cColorConverter::cudaYUY2ToRGB(rawLeft, rgbLeft, imgSize);
+			cColorConverter::cudaYUY2ToRGB(rawRight, rgbRight, imgSize);
 
 			cv::remap(tmpMatRGBLeft, tmpMatRGBLeft, undistData.map1x,
 					undistData.map1y, cv::INTER_LINEAR, cv::BORDER_CONSTANT,
@@ -114,30 +148,15 @@ void ProcThread::run() {
 					undistData.map2y, cv::INTER_LINEAR, cv::BORDER_CONSTANT,
 					cv::Scalar());
 
-			if (matcher.processStereo(tmpMatRGBLeft.data,
-					tmpMatRGBRight.data)) {
-
-				QImage imgLeft, imgRight;
-				imgLeft = QImage(tmpMatRGBLeft.data, leftGrabber.getWidth(),
-						leftGrabber.getHeight(), QImage::Format_RGB888);
-				imgRight = QImage(tmpMatRGBRight.data, leftGrabber.getWidth(),
-						leftGrabber.getHeight(), QImage::Format_RGB888);
-
-				QImage imgLeftDisp, imgRightDisp, leftDispRaw;
-				imgLeftDisp = QImage(matcher.host_dispColorLeft,
-						leftGrabber.getWidth(), leftGrabber.getHeight(),
-						QImage::Format_RGB888);
-				imgRightDisp = QImage(matcher.host_dispColorRight,
-						leftGrabber.getWidth(), leftGrabber.getHeight(),
-						QImage::Format_RGB888);
-				leftDispRaw = QImage((unsigned char*) matcher.host_dispRawLeft,
-						leftGrabber.getWidth(), leftGrabber.getHeight(),
-						QImage::Format_RGB32);
+			if (matcher.processStereo(rgbLeft,rgbRight)) {
 
 				emit finishedFrame(imgLeft.copy(), imgRight.copy(),
-						imgLeftDisp.copy(), imgRightDisp.copy(),
-						leftDispRaw.copy());
+						imgLeftDisp.copy(),imgRightDisp.copy(),leftDispRaw.copy());
+			}else{
+				printf("error\n");
 			}
+
+			printf("%f ms\n", (clock()-startTime)/10000.0);
 		}
 	}
 }

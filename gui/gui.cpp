@@ -94,6 +94,7 @@ void Gui::onClickCapture() {
 		settings.setValue("camRight",getRightCamDev().c_str());
 		if (startCapture) {
 			onSettingsChanged(0);
+			// TODO Disable Cam selection
 			form.b_startCapture->setText("Stop");
 		} else {
 			form.b_startCapture->setText("Capture");

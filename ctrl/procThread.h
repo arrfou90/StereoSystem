@@ -44,7 +44,7 @@ signals:
 protected:
 	void run();
 
-	bool isRunning;
+	bool isRunning, isInitialized;
 	cGrabber leftGrabber, rightGrabber;
 	int imgSize;
 
@@ -56,6 +56,8 @@ protected:
 	cCudaStereoMatcher matcher;
 	unsigned char* rawLeft;
 	unsigned char* rawRight;
+	unsigned char* rgbLeft;
+	unsigned char* rgbRight;
 
 };
 #endif

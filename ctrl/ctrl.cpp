@@ -10,8 +10,10 @@ Ctrl::Ctrl() {
 
 	cv::FileStorage calibrationSettings;
 
-	if(!calibrationSettings.open("mystereocalib_0.17.yml", cv::FileStorage::READ))
+	if(!calibrationSettings.open("mystereocalib_0.17.yml", cv::FileStorage::READ)){
+		printf("Can't open camera calibration");
 		return;
+	}
 
 	cv::Mat CM1;
 	cv::Mat T;

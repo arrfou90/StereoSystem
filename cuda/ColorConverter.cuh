@@ -23,7 +23,7 @@ private:
 	static void cudaRGBToGray_dev(unsigned char* dev_rgbData,
 			unsigned char* dev_grayData, unsigned int imgSize);
 	static void cudaYUY2ToRGB_dev(unsigned char* dev_yuy2Data,
-			unsigned char* dev_brgData, unsigned int imgSize);
+			unsigned char* dev_rgbData, unsigned int imgSize);
 	static void cudaYUY2ToGray_dev(unsigned char* dev_yuy2Data,
 			unsigned char* dev_grayData, unsigned int imgSize);
 
