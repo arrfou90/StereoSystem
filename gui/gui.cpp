@@ -95,9 +95,19 @@ void Gui::onClickCapture() {
 		if (startCapture) {
 			onSettingsChanged(0);
 			// TODO Disable Cam selection
+			form.b_otherCamLeft->setEnabled(false);
+			form.b_otherCamRight->setEnabled(false);
+			form.cb_LeftCam->setEnabled(false);
+			form.cb_RightCam->setEnabled(false);
+			form.b_refreshDev->setEnabled(false);
 			form.b_startCapture->setText("Stop");
 		} else {
 			form.b_startCapture->setText("Capture");
+			form.b_otherCamLeft->setEnabled(true);
+			form.b_otherCamRight->setEnabled(true);
+			form.cb_LeftCam->setEnabled(true);
+			form.cb_RightCam->setEnabled(true);
+			form.b_refreshDev->setEnabled(true);
 		}
 	} else {
 //		QMessageBox messageBox;

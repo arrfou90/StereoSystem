@@ -2,6 +2,7 @@
 #include <cuda_runtime.h>
 
 #include "ColorConverterKernels.cuh"
+#include "../errorCheck.cuh"
 
 __global__ void kernelCalcHist(unsigned char* data, unsigned int* hist,
 		unsigned int size) {
@@ -37,6 +38,7 @@ void cudaCalcHist_dev(unsigned char* dev_data, unsigned int* dev_hist,
 	int n_blocks = size / blockSize + (size % blockSize == 0 ? 0 : 1);
 
 	kernelCalcHist<<<n_blocks, blockSize>>>(dev_data, dev_hist, size);
+	CudaCheckError();
 }
 bool cudaCalcHist(unsigned char* data, unsigned int* hist, unsigned int size) {
 	if (size > 1024 * 1024) {
@@ -48,17 +50,17 @@ bool cudaCalcHist(unsigned char* data, unsigned int* hist, unsigned int size) {
 	unsigned int histSize = 256;
 	unsigned int histBuffSize = histSize * sizeof(int);
 
-	cudaMalloc((void**) &dev_data, size);
-	cudaMalloc((void**) &dev_hist, histBuffSize);
+	CudaSafeCall(cudaMalloc((void**) &dev_data, size));
+	CudaSafeCall(cudaMalloc((void**) &dev_hist, histBuffSize));
 
-	cudaMemset(dev_hist, 0, histBuffSize);
-	cudaMemcpy(dev_data, data, size, cudaMemcpyHostToDevice);
+	CudaSafeCall(cudaMemset(dev_hist, 0, histBuffSize));
+	CudaSafeCall(cudaMemcpy(dev_data, data, size, cudaMemcpyHostToDevice));
 
 	cudaCalcHist_dev(dev_data, dev_hist, size);
 
-	cudaMemcpy(hist, dev_hist, histBuffSize, cudaMemcpyDeviceToHost);
-	cudaFree(dev_data);
-	cudaFree(dev_hist);
+	CudaSafeCall(cudaMemcpy(hist, dev_hist, histBuffSize, cudaMemcpyDeviceToHost));
+	CudaSafeCall(cudaFree(dev_data));
+	CudaSafeCall(cudaFree(dev_hist));
 
 	return true;
 }
@@ -77,6 +79,7 @@ void cudaRGBToGray_dev(unsigned char* dev_rgbData, unsigned char* dev_grayData,
 	int nBlocks = imgSize / blockSize + (imgSize % blockSize == 0 ? 0 : 1);
 
 	kernelRGBToGray<<<nBlocks, blockSize>>>(dev_rgbData, dev_grayData, imgSize);
+	CudaCheckError();
 }
 bool cudaRGBToGray(unsigned char* host_rgbData, unsigned char* host_grayData,
 		unsigned int imgSize) {
@@ -86,16 +89,16 @@ bool cudaRGBToGray(unsigned char* host_rgbData, unsigned char* host_grayData,
 	unsigned char* dev_rgbData;
 	unsigned char* dev_grayData;
 
-	cudaMalloc((void**) &dev_rgbData, imgSize * 3);
-	cudaMalloc((void**) &dev_grayData, imgSize);
+	CudaSafeCall(cudaMalloc((void**) &dev_rgbData, imgSize * 3));
+	CudaSafeCall(cudaMalloc((void**) &dev_grayData, imgSize));
 
-	cudaMemcpy(dev_rgbData, host_rgbData, imgSize * 3, cudaMemcpyHostToDevice);
+	CudaSafeCall(cudaMemcpy(dev_rgbData, host_rgbData, imgSize * 3, cudaMemcpyHostToDevice));
 
 	cudaRGBToGray_dev(dev_rgbData, dev_grayData, imgSize);
 
-	cudaMemcpy(host_grayData, dev_grayData, imgSize, cudaMemcpyDeviceToHost);
-	cudaFree(dev_rgbData);
-	cudaFree(dev_grayData);
+	CudaSafeCall(cudaMemcpy(host_grayData, dev_grayData, imgSize, cudaMemcpyDeviceToHost));
+	CudaSafeCall(cudaFree(dev_rgbData));
+	CudaSafeCall(cudaFree(dev_grayData));
 
 	return true;
 }
@@ -156,18 +159,18 @@ bool cudaYUY2ToRGB(unsigned char* host_yuy2Data, unsigned char* host_rgbData,
 	unsigned char* dev_rgbData;
 	unsigned char* dev_yuy2Data;
 
-	cudaMalloc((void**) &dev_rgbData, imgSize * 3);
-	cudaMalloc((void**) &dev_yuy2Data, imgSize * 2);
+	CudaSafeCall(cudaMalloc((void**) &dev_rgbData, imgSize * 3));
+	CudaSafeCall(cudaMalloc((void**) &dev_yuy2Data, imgSize * 2));
 
-	cudaMemcpy(dev_yuy2Data, host_yuy2Data, imgSize * 2,
-			cudaMemcpyHostToDevice);
+	CudaSafeCall(cudaMemcpy(dev_yuy2Data, host_yuy2Data, imgSize * 2,
+			cudaMemcpyHostToDevice));
 
 	cudaYUY2ToRGB_dev(dev_yuy2Data, dev_rgbData, imgSize);
 
-	cudaMemcpy(host_rgbData, dev_rgbData, imgSize * 3, cudaMemcpyDeviceToHost);
+	CudaSafeCall(cudaMemcpy(host_rgbData, dev_rgbData, imgSize * 3, cudaMemcpyDeviceToHost));
 
-	cudaFree(dev_rgbData);
-	cudaFree(dev_yuy2Data);
+	CudaSafeCall(cudaFree(dev_rgbData));
+	CudaSafeCall(cudaFree(dev_yuy2Data));
 	return true;
 }
 
@@ -185,24 +188,25 @@ void cudaYUY2ToGray_dev(unsigned char* dev_yuy2Data,
 
 	kernelYUY2ToGray<<<nBlocks, blockSize>>>(dev_yuy2Data, dev_grayData,
 			imgSize);
+	CudaCheckError();
 }
 bool cudaYUY2ToGray(unsigned char* host_yuy2Data, unsigned char* host_grayData,
 		unsigned int imgSize) {
 	unsigned char* dev_grayData;
 	unsigned char* dev_yuy2Data;
 
-	cudaMalloc((void**) &dev_grayData, imgSize);
-	cudaMalloc((void**) &dev_yuy2Data, imgSize * 2);
+	CudaSafeCall(cudaMalloc((void**) &dev_grayData, imgSize));
+	CudaSafeCall(cudaMalloc((void**) &dev_yuy2Data, imgSize * 2));
 
-	cudaMemcpy(dev_yuy2Data, host_yuy2Data, imgSize * 2,
-			cudaMemcpyHostToDevice);
+	CudaSafeCall(cudaMemcpy(dev_yuy2Data, host_yuy2Data, imgSize * 2,
+			cudaMemcpyHostToDevice));
 
 	cudaYUY2ToGray_dev(dev_yuy2Data, dev_grayData, imgSize);
 
-	cudaMemcpy(host_grayData, dev_grayData, imgSize, cudaMemcpyDeviceToHost);
+	CudaSafeCall(cudaMemcpy(host_grayData, dev_grayData, imgSize, cudaMemcpyDeviceToHost));
 
-	cudaFree(dev_grayData);
-	cudaFree(dev_yuy2Data);
+	CudaSafeCall(cudaFree(dev_grayData));
+	CudaSafeCall(cudaFree(dev_yuy2Data));
 	return true;
 }
 __global__ void kernelGrayToPseudoColor(unsigned char* dev_inputImg,
@@ -295,7 +299,7 @@ __global__ void kernelGrayToPseudoColor(float* dev_inputImg,
 		v = 100;
 		int grayVal = dev_inputImg[idx];
 
-		if(scaledFloat)
+		if (scaledFloat)
 			grayVal *= 255;
 
 		if (grayVal > maxGray)
@@ -369,6 +373,7 @@ void cudaGrayToPseudoColor_dev(unsigned char* dev_grayImg,
 
 	kernelGrayToPseudoColor<<<nBlocks, blockSize>>>(dev_grayImg,
 			dev_pseudoColor, imgSize, maxGray, minH, maxH);
+	CudaCheckError();
 }
 void cudaGrayToPseudoColor(unsigned char* host_grayImg,
 		unsigned char* host_pseudoColor, int imgSize, int maxGray, int minH,
@@ -376,17 +381,17 @@ void cudaGrayToPseudoColor(unsigned char* host_grayImg,
 	unsigned char* dev_grayImg;
 	unsigned char* dev_pseudoColor;
 
-	cudaMalloc((void**) &dev_grayImg, imgSize);
-	cudaMalloc((void**) &dev_pseudoColor, imgSize * 3);
+	CudaSafeCall(cudaMalloc((void**) &dev_grayImg, imgSize));
+	CudaSafeCall(cudaMalloc((void**) &dev_pseudoColor, imgSize * 3));
 
-	cudaMemcpy(dev_grayImg, host_grayImg, imgSize, cudaMemcpyHostToDevice);
+	CudaSafeCall(cudaMemcpy(dev_grayImg, host_grayImg, imgSize, cudaMemcpyHostToDevice));
 
 	cudaGrayToPseudoColor_dev(dev_grayImg, dev_pseudoColor, imgSize, maxGray,
 			minH, maxH);
 
-	cudaMemcpy(host_pseudoColor, dev_pseudoColor, imgSize * 3,
-			cudaMemcpyDeviceToHost);
+	CudaSafeCall(cudaMemcpy(host_pseudoColor, dev_pseudoColor, imgSize * 3,
+			cudaMemcpyDeviceToHost));
 
-	cudaFree(dev_grayImg);
-	cudaFree(dev_pseudoColor);
+	CudaSafeCall(cudaFree(dev_grayImg));
+	CudaSafeCall(cudaFree(dev_pseudoColor));
 }
